@@ -1,0 +1,41 @@
+# setup Laptop IP address
+ip=192.168.240.253
+mask=255.255.0.0
+
+# change directory
+cd /home/spinnaker/patrick/spinnaker-code/emc_final
+
+# source spinnaker setup files
+source ../spinnaker_tools_133/setup
+
+# ping 24 board bmp to check status
+ping 192.168.3.0
+
+# In a separate terminal start the SDP receive perl program (for reporting)
+# No need for output redirection. This script automatically logs its output
+# to 'eth.log'
+./sdp_recv 17895 1.5
+
+# start ybug in the 1st erminal
+ybug 192.168.3.0 -bmp 192.168.3.0/0-23
+
+# load the bootup/reset program (this takes about a minute)
+@ reset24.ybug
+
+# Before starting the emc test program make sure that all cores and links are up:
+./check_24board.sh
+ 
+# Run the emc test program
+# This is the version compiled using the ARM compiler
+@ emc_24board_arm.ybug
+
+# For a quick run, use
+@ emc_24board_quick.ybug
+
+# To check that all cores and links are up run (not in ybug):
+./check_24board.sh
+ 
+# For a temperature visualization run (not in ybug):
+bmpstat 192.168.3.0
+
+
