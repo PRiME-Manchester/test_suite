@@ -15,7 +15,7 @@ reset
 sleep 5
 boot scamp.boot spin5.conf
 
-iptag 1 set . 17896
+iptag 1 set . 17895
 app_load spinn_board_test.aplx all 1-16 16
 sleep
 app_sig all 16 sync0
@@ -27,7 +27,7 @@ reset
 sleep 5
 boot scamp.boot spin5.conf
 
-iptag 1 set . 17897
+iptag 1 set . 17895
 app_load spinn_board_test.aplx all 1-16 16
 sleep
 app_sig all 16 sync0

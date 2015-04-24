@@ -1,5 +1,3 @@
-//#include "globals.h"
-
 #define EI 11  /* typically 10..13 */
 #define EJ  4  /* typically 4..5   */
 #define P   1  /* If match length <= P then output one character */

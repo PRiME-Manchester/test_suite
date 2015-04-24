@@ -77,6 +77,7 @@ volatile uint buffer[N*2];
 
 uint coreID;
 uint chipID, chipBoardID, ethBoardID;
+uchar *boardIP;
 uint chipIDx, chipIDy, chipNum;
 uint chipBoardIDx, chipBoardIDy, chipBoardNum;
 uint decode_status = 0;
@@ -179,6 +180,7 @@ int  count_chars(char *str);
 void check_data(int trial_num);
 uint spin1_get_chip_board_id(void);
 uint spin1_get_eth_board_id(void);
+uchar *spin1_get_ipaddr(void);
 
 void send_msg(char *s);
 int frac(float num, uint precision);
@@ -205,6 +207,7 @@ int c_main(void)
   chipID      = spin1_get_chip_id();
   chipBoardID = spin1_get_chip_board_id();
   ethBoardID  = spin1_get_eth_board_id();
+  boardIP     = spin1_get_ipaddr();
 
   io_printf(IO_BUF, "Eth_boardID  = (%d,%d)\n", ethBoardID>>8,  ethBoardID&255);
   
@@ -221,8 +224,8 @@ int c_main(void)
   if (leadAp)
     ijtag_init();
 
-  io_printf(IO_BUF, "ChipID (%d,%d), chipID %d coreID %d\n", chipIDx, chipIDy, chipNum, coreID);
-  io_printf(IO_BUF, "Chip_boardID (%d,%d), ChipBoardNum %d\n", chipBoardIDx, chipBoardIDy, chipBoardNum);
+  io_printf(IO_BUF, "ChipID (%d,%d), chipID %d coreID %d\n",   ethBoardID, chipIDx, chipIDy, chipNum, coreID);
+  io_printf(IO_BUF, "Chip_boardID (%d,%d), ChipBoardNum %d\n", ethBoardID, chipBoardIDx, chipBoardIDy, chipBoardNum);
 
   // Initialize variables
   error_pkt = 0;
@@ -493,7 +496,7 @@ void encode_decode(uint none1, uint none2)
     if (chipIDx==0 && chipIDy==0 && leadAp)
     {
       t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
-      io_printf(s, "T: %ss. Trial: %d", ftoa(t,1), i+1);
+      io_printf(s, "BId:%d.%d T: %ss. Trial: %d", boardIP[3], boardIP[4], ftoa(t,1), i+1);
       send_msg(s);
     }
 
@@ -550,7 +553,7 @@ void encode_decode(uint none1, uint none2)
           if (chipID==0 && coreID==1)
           {
             t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
-            io_printf(s, "T: %ss. Transmitting packets (rep %d) ...", ftoa(t,1), j+1);
+            io_printf(s, "BId:%d.%d T: %ss. Transmitting packets (rep %d) ...", boardIP[3], boardIP[4], ftoa(t,1), j+1);
             send_msg(s);
           }
           
@@ -563,7 +566,7 @@ void encode_decode(uint none1, uint none2)
           if (chipID==0 && coreID==1)
           {
             t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
-            io_printf(s, "T: %ss. Waiting for decode to finish", ftoa(t,1));
+            io_printf(s, "BId:%d.%d T: %ss. Waiting for decode to finish", boardIP[3], boardIP[4], ftoa(t,1));
             send_msg(s);
           }
 
@@ -573,7 +576,7 @@ void encode_decode(uint none1, uint none2)
           if (chipID==0 && coreID==1)
           {
             t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
-            io_printf(s, "T: %ss. Decode done received", ftoa(t,1));
+            io_printf(s, "BId:%d.%d T: %ss. Decode done received", boardIP[3], boardIP[4], ftoa(t,1));
             send_msg(s);
           }
 
@@ -897,7 +900,7 @@ void decode_rx_packets(uint none1, uint none2)
       rx_packets_status[coreID-7] = 2;
 
       io_printf(IO_BUF, "ERROR! Rx!=Exp pkt!\n");
-      io_printf(s, "ERROR! Trial: %d Rx packets (%d) != Expected packets (%d)!", trial_num, packets-8, data.orig_size+data.enc_size);
+      io_printf(s, "BId:%d.%d ERROR! Trial: %d Rx packets (%d) != Expected packets (%d)!", boardIP[3], boardIP[4], trial_num, packets-8, data.orig_size+data.enc_size);
       send_msg(s);
 
       // Decoding done
@@ -939,7 +942,7 @@ void report_status(uint ticks, uint null)
     if (tmp!=info_tx->progress[0])
     {
       t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1e6;
-      io_printf(s, "T: %ss. Trial: %d Progress: %d%%", ftoa(t,1), info_tx->trial_num, info_tx->progress[0]);
+      io_printf(s, "BId:%d.%d T: %ss. Trial: %d Progress: %d%%", boardIP[3], boardIP[4], ftoa(t,1), info_tx->trial_num, info_tx->progress[0]);
       send_msg(s);
 
       tmp = info_tx->progress[0];
@@ -953,7 +956,7 @@ void report_status(uint ticks, uint null)
     {
       timeout = 0;
       eof_sent = 0;
-      io_printf(s, "Acknowledge timeout!");
+      io_printf(s, "BId:%d.%d Acknowledge timeout!", boardIP[3], boardIP[4]);
       send_msg(s);
     }
   }
@@ -1271,7 +1274,7 @@ void check_data(int trial_num)
     io_printf(IO_BUF, "ERROR! Orig&Dec DO NOT match!!!\n");
 
     // Send SDP message
-    io_printf(s, "ERROR! Original and Decoded Outputs do not match!!! Trial: %d, Errors:%d", trial_num, err);
+    io_printf(s, "BId:%d.%d ERROR! Original and Decoded Outputs do not match!!! Trial: %d, Errors:%d", boardIP[3], boardIP[4], trial_num, err);
     send_msg(s);
 
     decode_status_chip[coreID-1] = 2;
@@ -1372,6 +1375,13 @@ uint spin1_get_eth_board_id(void)
   return (uint)sv->eth_addr;
 }
 
+uchar *spin1_get_ipaddr(void)
+{
+  uchar *ip;
+
+  return ip = sv->ip_addr;
+}
+
 // Reset JTAG controller
 void ijtag_init(void)
 {
@@ -1392,8 +1402,8 @@ void report_system_setup(void)
 #ifdef BOARDS24
     boards = 24;
 #endif
-    io_printf(s, "System setup - Boards:%d, XChips:%d, YChips:%d, Trials:%d, Reps:%d, Bytes:%d",
-                                 boards, XCHIPS, YCHIPS, TRIALS, TX_REPS, SDRAM_BUFFER);
+    io_printf(s, "BId:%d.%d System setup - Boards:%d, XChips:%d, YChips:%d, Trials:%d, Reps:%d, Bytes:%d",
+                                 boardIP[3], boardIP[4], boards, XCHIPS, YCHIPS, TRIALS, TX_REPS, SDRAM_BUFFER);
     send_msg(s);
   }
 }
