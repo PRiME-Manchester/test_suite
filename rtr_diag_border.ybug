@@ -1,0 +1,42 @@
+sp 0 0
+rtr_diag
+sp 1 0
+rtr_diag
+sp 2 0
+rtr_diag
+sp 3 0
+rtr_diag
+sp 4 0
+rtr_diag
+sp 5 1
+rtr_diag
+sp 6 2
+rtr_diag
+sp 7 3
+rtr_diag
+sp 7 4
+rtr_diag
+sp 7 5
+rtr_diag
+sp 7 6
+rtr_diag
+sp 7 7
+rtr_diag
+sp 6 7
+rtr_diag
+sp 5 7
+rtr_diag
+sp 4 7
+rtr_diag
+sp 3 6
+rtr_diag
+sp 2 5
+rtr_diag
+sp 1 4
+rtr_diag
+sp 0 3
+rtr_diag
+sp 0 2
+rtr_diag
+sp 0 1
+rtr_diag
