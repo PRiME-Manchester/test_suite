@@ -15,20 +15,21 @@
 // mod( 2,3) = 2
 // mod( 3,3) = 0
 // mod( 4,3) = 1
-#define mod(x) ((x%m + m)%m)
+#define mod(x,m) ((x%(m) + m)%(m))
 
 #define NO_DEBUG   // rename to DEBUG to enable more verbose debugging on iobuf
 #define NO_FAULT_TESTING // rename to FAULT_TESTING when injecting faults in the Spinn Links
-#define BOARDS3    // rename to BOARDS24 when working with the 24 board machine, BOARDS3 when using 3 board machine
+#define BOARDS1    // rename to BOARDS24 when working with the 24 board machine, BOARDS3 when using 3 board machine
 #define TX_PACKETS // rename to disable transmission of packets between chips
 
 #define TIMER_TICK_PERIOD  10000 // 10ms
-#define SDRAM_BUFFER       1000000
+#define SDRAM_BUFFER       100000
 #define SDRAM_BUFFER_X     (SDRAM_BUFFER*1.2)
 #define LZSS_EOF           -1
-#define DELAY              3 //us delay 
-// #define NODELAY // this variable removes any delays, takes precedence over DELAY
+//#define DELAY              2 //us delay 
+#define NODELAY // this variable removes any delays, takes precedence over DELAY
 
+// default values for 1 board
 #define XCHIPS_BOARD 8
 #define YCHIPS_BOARD 8
 
@@ -40,18 +41,23 @@
 #ifdef BOARDS3 // Num chips=144
   #define XCHIPS 12
   #define YCHIPS 12
-#endif 
+#endif
+
+#ifdef BOARDS3A // Num chips=144
+  #define XCHIPS 8
+  #define YCHIPS 8
+#endif
 
 #ifdef BOARDS24 // Num chips=1152
   #define XCHIPS 48
   #define YCHIPS 24
 #endif
 
-#define CHIPS_TX_N     6
-#define CHIPS_RX_N     6
+#define CHIPS_TX_N     6 // cores 1-6  are used for transmitting data
+#define CHIPS_RX_N     6 // cores 7-12 are used for receiving data
 #define DECODE_ST_SIZE 6 // this should be 6, set to 12 only for testing the SDRAM used by all 12 cores
-#define TRIALS         100 //using a buffer of 500000, trials=100, tx_reps=50 results in a run time of 8hrs 
-#define TX_REPS        5 
+#define TRIALS         2 //using a buffer of 500000, trials=100, tx_reps=50 results in a run time of 8hrs 
+#define TX_REPS        10 
 
 // Address values
 #define FINISH             (SPINN_SDRAM_BASE + 0)                // size: 12 ints ( 0..11)
@@ -77,6 +83,13 @@ uint decode_status = 0;
 uint eof_sent = 0;
 uint timeout = 0;
 
+// Connection defintion for a one board SpiNN5 board
+// 1 implies at a connection is present, and a 0 means no connection
+// This definition table will be used to make sure that no data
+// is sent from those links on the border that are floating.
+// Values initialized in function border_links_setup()
+uint c[8][8];
+
 volatile float t;
 uint t_int, t_frac;
 uint error_pkt;
@@ -99,6 +112,7 @@ typedef struct
 } info_tx_t;
 static volatile info_tx_t *const info_tx = (info_tx_t *) CHIP_INFO_TX;
 
+/*
 typedef struct
 {
   volatile uint trial_num;
@@ -109,7 +123,8 @@ typedef struct
   volatile ushort decode_time;
   volatile uchar enc_dec_match; // yes/no
 } info_rx_t;
-static volatile info_rx_t *const info_rx               = (info_rx_t *) CHIP_INFO_RX;
+static volatile info_rx_t *const info_rx = (info_rx_t *) CHIP_INFO_RX;
+*/
 
 static volatile uint   *const finish             = (uint *) FINISH; 
 static volatile uint   *const decode_status_chip = (uint *) DECODE_STATUS_CHIP;
@@ -176,8 +191,12 @@ void tx_packets(int trialNum);
 void fault_test_init(void);
 void ijtag_init(void);
 
-//Reporting
+// Reporting
 void report_system_setup(void);
+
+// Misc functions
+uint bin2dec(const char* bin);
+void border_links_setup(void);
 
 int c_main(void)
 {
@@ -243,6 +262,10 @@ int c_main(void)
   // Setup router links
   router_setup();
   
+#ifdef BOARDS1
+  border_links_setup();
+#endif
+
   // Allocate SDRAM memory for the original, encoded and decoded arrays
   allocate_memory();
 
@@ -320,6 +343,36 @@ void router_setup(void)
   /* ------------------------------------------------------------------- */
   io_printf (IO_BUF, "Routes configured\n", coreID);
 
+}
+
+// SpiNN5 single board border links
+void border_links_setup(void)
+{
+  for(uint i=0; i<8; i++)
+    for(uint j=0; j<8; j++)
+      c[i][j] = 63;
+
+  c[0][0] = bin2dec("000111");
+  c[1][0] = bin2dec("001111");
+  c[2][0] = bin2dec("001111");
+  c[3][0] = bin2dec("001111");
+  c[4][0] = bin2dec("001110");
+  c[5][1] = bin2dec("011110");
+  c[6][2] = bin2dec("011110");
+  c[7][3] = bin2dec("011100");
+  c[7][4] = bin2dec("111100");
+  c[7][5] = bin2dec("111100");
+  c[7][6] = bin2dec("111100");
+  c[7][7] = bin2dec("111000");
+  c[6][7] = bin2dec("111001");
+  c[5][7] = bin2dec("111001");
+  c[4][7] = bin2dec("110001");
+  c[3][6] = bin2dec("110011");
+  c[2][5] = bin2dec("110011");
+  c[1][4] = bin2dec("110011");
+  c[0][3] = bin2dec("100011");
+  c[0][2] = bin2dec("100111");
+  c[0][1] = bin2dec("100111");
 }
 
 // Allocate the SDRAM memory for the transmit as well as the receive chips
@@ -408,7 +461,7 @@ void gen_random_data(void)
 {
   if (coreID>=1 && coreID<=CHIPS_TX_N)
   {
-    //Seed random number generate
+    //Seed random number generator
     //sark_srand(chipID + coreID);
     sark_srand(35);
 
@@ -487,42 +540,47 @@ void encode_decode(uint none1, uint none2)
       finish[coreID-1] = 1;
 
 #ifdef TX_PACKETS
-      for(j=0; j<TX_REPS; j++)
+      if ((c[chipIDx][chipIDy]>>(coreID-1))&1)
       {
-        io_printf(IO_BUF, "TX pkt (Rep %d)...\n", j+1);
 
-        if (chipID==0 && coreID==1)
+        for(j=0; j<TX_REPS; j++)
         {
-          t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
-          io_printf(s, "T: %ss. Transmitting packets (rep %d) ...", ftoa(t,1), j+1);
-          send_msg(s);
-        }
-        
-        decode_done = 0;
-        
-        // Transmit packets TX_REPS times
-        tx_packets(j);
+          io_printf(IO_BUF, "TX pkt (Rep %d)...\n", j+1);
 
-        io_printf(IO_BUF, "Waiting for dec\n");
-        if (chipID==0 && coreID==1)
-        {
-          t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
-          io_printf(s, "T: %ss. Waiting for decode to finish", ftoa(t,1));
-          send_msg(s);
-        }
+          if (chipID==0 && coreID==1)
+          {
+            t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
+            io_printf(s, "T: %ss. Transmitting packets (rep %d) ...", ftoa(t,1), j+1);
+            send_msg(s);
+          }
+          
+          decode_done = 0;
+          
+          // Transmit packets TX_REPS times
+          tx_packets(j);
 
-        // Wait for decode_done signal
-        while(!decode_done);
-        io_printf(IO_BUF, "Dec done Rx\n");
-        if (chipID==0 && coreID==1)
-        {
-          t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
-          io_printf(s, "T: %ss. Decode done received", ftoa(t,1));
-          send_msg(s);
-        }
+          io_printf(IO_BUF, "Waiting for dec\n");
+          if (chipID==0 && coreID==1)
+          {
+            t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
+            io_printf(s, "T: %ss. Waiting for decode to finish", ftoa(t,1));
+            send_msg(s);
+          }
 
-        decode_done = 0;
-      } 
+          // Wait for decode_done signal
+          while(!decode_done);
+          io_printf(IO_BUF, "Dec done Rx\n");
+          if (chipID==0 && coreID==1)
+          {
+            t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
+            io_printf(s, "T: %ss. Decode done received", ftoa(t,1));
+            send_msg(s);
+          }
+
+          decode_done = 0;
+        } 
+
+      } //endif
 #endif
 
     }
@@ -676,7 +734,9 @@ void tx_packets(int trialNum)
       while(!spin1_send_mc_packet((chipID<<8)+coreID-1, data_orig.buffer[i], WITH_PAYLOAD));
 #endif
 
+#ifndef NODELAY
     spin1_delay_us(DELAY);
+#endif
   }
 
   // Sending encoded stream
@@ -746,6 +806,7 @@ void tx_packets(int trialNum)
 
   // eof_sent is used in the ack received timeout
   eof_sent = 1;
+
 }
 
 // Count the packets received
@@ -870,9 +931,7 @@ void decode_rx_packets(uint none1, uint none2)
 
 void report_status(uint ticks, uint null)
 {
-  uint finish_tmp=0;
   char s[100];
-  static int done = 0;
   static int tmp = -1;
 
   if (chipID==0 && coreID==13 && (ticks % (XCHIPS_BOARD * YCHIPS_BOARD))==chipBoardNum )
@@ -900,6 +959,10 @@ void report_status(uint ticks, uint null)
   }
 
 /*
+  static int done = 0;
+
+  uint finish_tmp=0;
+
   decode_status_chip[coreID-1] = decode_status;
 
   // send results to host
@@ -1388,4 +1451,14 @@ void fault_test_init(void)
   fault[2].drop_ack      = -1; // drop ack
 }
 
+uint bin2dec(const char* bin)
+{
+  uint power=1, dec=0;
+  for(int i=strlen(bin); i>0; i--)
+  {
+    dec += bin[i-1]=='1'?power:0;
+    power*=2;
+  }
+  return dec;
+}
 

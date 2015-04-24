@@ -23,7 +23,7 @@
 
 # Name of app (derived from C source - eg sark.c)
 
-APP := emc
+APP := spinn_board_test
 
 # Configuration options
 
@@ -53,6 +53,10 @@ else
   INC_DIR := ../../include
 endif
 
+# Disable various armcc warnings
+# 1293 is refers to warning "assignment in condition"
+AFLAGS := --diag_suppress=1293
+
 #-------------------------------------------------------------------------------
 
 # Set up the various compile/link options for GNU and ARM tools
@@ -66,17 +70,17 @@ ifeq ($(GNU),1)
 
   CT := $(CA) -mthumb -DTHUMB
 
-ifeq ($(LIB),1)
-  CFLAGS += -fdata-sections -ffunction-sections
-endif
+	ifeq ($(LIB),1)
+	  CFLAGS += -fdata-sections -ffunction-sections
+	endif
 
-ifeq ($(API),1)
-#  LIBRARY := -L$(LIB_DIR) -lspin1_api
-  LIBRARY := $(LIB_DIR)/libspin1_api.a
-else
-#  LIBRARY := -L$(LIB_DIR) -lsark
-  LIBRARY := $(LIB_DIR)/libsark.a
-endif
+	ifeq ($(API),1)
+	#  LIBRARY := -L$(LIB_DIR) -lspin1_api
+	  LIBRARY := $(LIB_DIR)/libspin1_api.a
+	else
+	#  LIBRARY := -L$(LIB_DIR) -lsark
+	  LIBRARY := $(LIB_DIR)/libsark.a
+	endif
 
   SCRIPT := $(LIB_DIR)/sark.lnk
 
@@ -90,20 +94,20 @@ endif
 else
   AS := armasm --keep --cpu=5te --apcs /interwork
 
-  CA := armcc -c --c99 --cpu=5te --apcs /interwork --min_array_alignment=4 \
+  CA := armcc $(AFLAGS) -c --c99 --cpu=5te --apcs /interwork --min_array_alignment=4 \
 	-I $(INC_DIR)
 
   CT := $(CA) --thumb -DTHUMB
 
-ifeq ($(LIB),1)
-  CFLAGS += --split_sections
-endif
+	ifeq ($(LIB),1)
+	  CFLAGS += --split_sections
+	endif
 
-ifeq ($(API),1)
-  LIBRARY := $(LIB_DIR)/spin1_api.a
-else
-  LIBRARY := $(LIB_DIR)/sark.a
-endif
+	ifeq ($(API),1)
+	  LIBRARY := $(LIB_DIR)/spin1_api.a
+	else
+	  LIBRARY := $(LIB_DIR)/sark.a
+	endif
 
   SCRIPT := $(LIB_DIR)/sark.sct
 
