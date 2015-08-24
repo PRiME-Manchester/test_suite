@@ -46,12 +46,6 @@
   #define BOARDSTOT 3
 #endif
 
-#ifdef BOARDS3A // Num chips=144
-  #define XCHIPS 8
-  #define YCHIPS 8
-  #define BOARDSTOT 3
-#endif
-
 #ifdef BOARDS24 // Num chips=1152
   #define XCHIPS 48
   #define YCHIPS 24
@@ -62,7 +56,7 @@
 #define CHIPS_RX_N     6 // cores 7-12 are used for receiving data
 #define DECODE_ST_SIZE 6 // this should be 6, set to 12 only for testing the SDRAM used by all 12 cores
 #define TRIALS         1 //using a buffer of 500000, trials=100, tx_reps=50 results in a run time of 8hrs 
-#define TX_REPS        1 
+#define TX_REPS        10 
 
 // Address values
 #define FINISH             (SPINN_SDRAM_BASE + 0)                // size: 12 ints ( 0..11)
@@ -505,8 +499,8 @@ void encode_decode(uint none1, uint none2)
   for(i=0; i<TRIALS; i++)
   {
     // Debugging boardNum
-    io_printf(s, "*** Board IP: %d.%d.%d.%d, Board ID: %d, Chip ID (%d,%d)", (uint)boardIP[0], (uint)boardIP[1], (uint)boardIP[2], (uint)boardIP[3], boardNum, chipBoardIDx, chipBoardIDy);
-    send_msg(s);
+    //io_printf(s, "*** Board IP: %d.%d.%d.%d, Board ID: %d, Chip ID (%d,%d)", (uint)boardIP[0], (uint)boardIP[1], (uint)boardIP[2], (uint)boardIP[3], boardNum, chipBoardIDx, chipBoardIDy);
+    //send_msg(s);
 
     // Send trial no. to host
     if (chipIDx==0 && chipIDy==0 && leadAp)

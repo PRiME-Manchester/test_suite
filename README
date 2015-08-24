@@ -3,13 +3,10 @@ ip=192.168.240.253
 mask=255.255.0.0
 
 # change directory
-cd /home/spinnaker/patrick/spinnaker-code/emc_final
+cd /home/spinnaker/patrick/spinnaker-code/test_suite
 
 # source spinnaker setup files
 source ../spinnaker_tools_133/setup
-
-# ping 24 board bmp to check status
-ping 192.168.3.0
 
 # In a separate terminal start the SDP receive perl program (for reporting)
 # No need for output redirection. This script automatically logs its output
