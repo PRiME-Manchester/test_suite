@@ -165,6 +165,7 @@ fault_t fault[3];
 // Spinnaker function prototypes
 void router_setup(void);
 void allocate_memory(void);
+//int mem_alloc(unsigned char *data, uint buffer_size);
 void gen_random_data(void);
 void encode_decode(uint none1, uint none2);
 void store_packets(uint key, uint payload);
@@ -270,7 +271,7 @@ int c_main(void)
   // -----------------------
   // Setup router links
   router_setup();
-  
+
 #ifdef BOARDS1
   border_links_setup();
 #endif
@@ -345,13 +346,9 @@ void router_setup(void)
     // Drop all packets which don't have routes (used to drop packets which
     // wraparound for 3-board and 24-board machines and don't have proper routes configures)
     //rtr_mc_set(e+12, 0, 0, 0);
+
+    io_printf(IO_BUF, "Routes configured %d\n", coreID);
   }
-
-  /* ------------------------------------------------------------------- */
-  /* initialize the application processor resources                      */
-  /* ------------------------------------------------------------------- */
-  io_printf(IO_BUF, "Routes configured\n", coreID);
-
 }
 
 // SpiNN5 single board border links
@@ -383,6 +380,7 @@ void border_links_setup(void)
   c[0][2] = bin2dec("100111");
   c[0][1] = bin2dec("100111");
 }
+
 
 // Allocate the SDRAM memory for the transmit as well as the receive chips
 void allocate_memory(void)
@@ -464,6 +462,75 @@ void allocate_memory(void)
   }
 
 }
+
+// // Allocate the SDRAM memory for the transmit as well as the receive chips
+// void allocate_memory(void)
+// {
+//   //int s_len;
+//   //char str[100];
+
+//   // Transmit and receive chips memory allocation
+
+//   // Allocate memory for TX chips
+//   if (coreID>=1 && coreID<=CHIPS_TX_N)
+//   {
+//     finish[coreID-1] = 0;
+//     decode_status_chip[coreID-1] = 0;
+//     rx_packets_status[coreID-1] = 0;
+
+//     // Welcome message
+//     io_printf(IO_BUF, "LZSS Enc/Dec Test\n");
+
+//     /*******************************************************/
+//     /* Allocate memory                                     */
+//     /*******************************************************/
+    
+//     // Original array
+//     if (!mem_alloc(data_orig.buffer, SDRAM_BUFFER))
+//       io_printf(IO_BUF, "Unable to allocate memory (Orig)!\n");
+
+//     // Compressed array
+//     if (!mem_alloc(data_enc.buffer, SDRAM_BUFFER_X))
+//       io_printf(IO_BUF, "Unable to allocate memory (Enc)!\n");
+
+//     // Decompressed array
+//     if (!mem_alloc(data_dec.buffer, SDRAM_BUFFER))
+//       io_printf(IO_BUF, "Unable to allocate memory (Dec)!\n");
+//   }
+
+//   // Allocate memory for RX chips
+//   if(coreID>=CHIPS_TX_N+1 && coreID<=CHIPS_TX_N+CHIPS_RX_N)
+//   {
+//     if (!mem_alloc(data.buffer, SDRAM_BUFFER+SDRAM_BUFFER_X+8))
+//       io_printf(IO_BUF, "Unable to allocate memory (Rx)!\n"); 
+
+//     // Decompressed array
+//     if (!mem_alloc(data_dec.buffer, SDRAM_BUFFER))
+//       io_printf(IO_BUF, "Unable to allocate memory (Rx)!\n"); 
+
+//     data.stream_end = 1;
+//   }
+
+// }
+
+// // Allocate and initialise memory
+// int mem_alloc(unsigned char *data, uint buffer_size)
+// {
+//   uint i;
+
+//   if (!(data = (unsigned char *)sark_xalloc (sv->sdram_heap, buffer_size*sizeof(char), 0, ALLOC_LOCK)))
+//   {
+//     //io_printf(IO_BUF, "Unable to allocate memory!\n");
+//     //rt_error(RTE_ABORT);
+//     return 0; //error state
+//   }      
+//   //Initialize buffer
+//   for(i=0; i<buffer_size; i++)
+//     data[i] = 0;
+  
+//   return 1; // no error
+// }
+
 
 // Generate the random data array for the transmit chips
 void gen_random_data(void)
