@@ -42,12 +42,12 @@ if [[ $? -ne 0 ]]; then printf "Badly formed IP address ($SPIN_IP)\n"; exit; fi
 # If all OK, proceed
 
 # Power cycle board no. 1
-# ybug $SPIN_IP -bmp $BMP_IP << EOF
-# power off
-# sleep
-# power on
-# sleep 5
-# EOF
+ybug $SPIN_IP -bmp $BMP_IP << EOF
+power off
+sleep 2
+power on
+sleep 6
+EOF
 
 echo "Board 1"
 ybug $SPIN_IP -bmp $BMP_IP << EOF
