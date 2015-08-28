@@ -49,7 +49,9 @@ power on
 sleep 6
 EOF
 
-echo "Board 1"
+echo ""
+echo "Single board testing"
+echo "--------------------"
 ybug $SPIN_IP -bmp $BMP_IP << EOF
 boot scamp.boot spin5-bt.conf
 
@@ -59,6 +61,17 @@ sleep
 app_sig all 16 sync0
 EOF
 
+echo ""
 echo "Listening to port 17895"
+echo "-----------------------"
 ./sdp_recv.pl 17895 1.5
 
+echo ""
+echo "Checking cores"
+echo "--------------"
+./tools/core-bt.pl 192.168.240.1
+
+echo ""
+echo "Checking links"
+echo "--------------"
+./tools/link-bt.pl 192.168.240.1
