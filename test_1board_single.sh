@@ -42,20 +42,23 @@ if [[ $? -ne 0 ]]; then printf "Badly formed IP address ($SPIN_IP)\n"; exit; fi
 # If all OK, proceed
 
 # Power cycle board no. 1
-ybug $SPIN_IP -bmp $BMP_IP << EOF
-power off
-sleep 2
-power on
-sleep 8
-EOF
+# ybug $SPIN_IP -bmp $BMP_IP << EOF
+# power off
+# sleep
+# power on
+# sleep 5
+# EOF
 
 echo "Board 1"
 ybug $SPIN_IP -bmp $BMP_IP << EOF
-boot scamp.boot spin5.conf
+boot scamp.boot spin5-bt.conf
 
 iptag 1 set . 17895
-app_load spinn_board_test.aplx all 1-16 16
+app_load spinn_board_test.aplx all 1-12 16
 sleep
 app_sig all 16 sync0
 EOF
+
+echo "Listening to port 17895"
+./sdp_recv.pl 17895 1.5
 

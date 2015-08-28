@@ -1,0 +1,106 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Time::HiRes qw(usleep);
+
+use SpiNN::Cmd;
+use SpiNN::Util;
+
+
+sub slurp
+{
+    my ($file, $max) = @_;
+
+    open my $fh, "<", $file or die "Can't open $file\n";
+
+    sysread $fh, my $buf, $max or die "Can't read from $file\n";
+
+    close $fh or die "Can't close $file\n";
+
+    return $buf;
+}
+
+
+sub usage
+{
+    die "usage: flashup <ip_addr> <slots> <bin_dir>\n";
+}
+
+
+usage () unless $#ARGV == 2;
+
+my ($ip, $slots, $dir) = @ARGV;
+
+usage () unless -d $dir;
+
+$slots = parse_bits ($slots, 0, 23);
+
+usage () unless $slots;
+
+
+my $boot_ver = "REL";	# Firmware versions
+my $prog_ver = "REL";
+#my $boot_ver = 102;
+#my $prog_ver = 136;
+
+
+my $boot = slurp ("$dir/BOOT-$boot_ver",    4096);
+my $main = slurp ("$dir/PROG5-$prog_ver",   65536);
+my $sec  = slurp ("$dir/PROG5H-$prog_ver",  65536);
+
+
+my $bmp = SpiNN::Cmd->new (target => $ip, delay => 0.05);
+
+die "Can't connect to $ip\n" unless $bmp;
+
+
+print "#\n# Writing backup images\n";
+
+for (my $slot = 23; $slot >= 0; $slot--)
+{
+    next unless $slots & (1 << $slot);
+
+    print "# slot $slot\n";
+    print "# write\n";
+
+    eval
+    {
+	$bmp->addr ($slot);
+	$bmp->flash_write (0x20000, $sec);
+	usleep (500000);
+    };
+
+    warn "# $@" if $@;
+    print "# read\n";
+
+    eval
+    {
+	my $read = $bmp->read (0x20000, length $sec);
+	warn "# read error\n" if $read ne $sec;
+    };
+
+    warn "# $@" if $@;
+}
+
+
+print "#\n# Writing main images\n";
+
+for (my $slot = 23; $slot >= 0; $slot--)
+{
+    next unless $slots & (1 << $slot);
+
+    print "# slot $slot\n";
+
+    eval
+    {
+	$bmp->addr ($slot);
+	$bmp->flash_write (0x70000, $main, update => 1);
+	usleep (2000000);
+    };
+
+    warn "# $@" if $@ && $@ !~ /RC_P2P_NOREPLY/;
+}
+
+$bmp->close ();

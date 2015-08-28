@@ -19,44 +19,29 @@
 
 #define NO_DEBUG   // rename to DEBUG to enable more verbose debugging on iobuf
 #define NO_FAULT_TESTING // rename to FAULT_TESTING when injecting faults in the Spinn Links
-#define BOARDS1    // rename to BOARDS24 when working with the 24 board machine, BOARDS3 when using 3 board machine
+#define BOARDS1    // currently only used border_links_setup()
 #define BOARD_STEP_IP 16
 #define TX_PACKETS // rename to disable transmission of packets between chips
 
-#define TIMER_TICK_PERIOD  10000 // 10ms
-#define SDRAM_BUFFER       100000
+#define TIMER_TICK_PERIOD  10000 // microseconds
+#define SDRAM_BUFFER       10000
 #define SDRAM_BUFFER_X     (SDRAM_BUFFER*1.2)
 #define LZSS_EOF           -1
-//#define DELAY              2 //us delay 
-#define NODELAY // this variable removes any delays, takes precedence over DELAY
+#define DELAY              2 //us delay 
+//#define NODELAY // this variable removes any delays, takes precedence over DELAY
 
 // default values for 1 board
 #define XCHIPS_BOARD 8
 #define YCHIPS_BOARD 8
 
-#ifdef BOARDS1 // Num chips=48
-  #define XCHIPS 8
-  #define YCHIPS 8
-  #define BOARDSTOT 1
-#endif
-
-#ifdef BOARDS3 // Num chips=144
-  #define XCHIPS 12
-  #define YCHIPS 12
-  #define BOARDSTOT 3
-#endif
-
-#ifdef BOARDS24 // Num chips=1152
-  #define XCHIPS 48
-  #define YCHIPS 24
-  #define BOARDSTOT 24
-#endif
+#define XCHIPS 8
+#define YCHIPS 8
 
 #define CHIPS_TX_N     6 // cores 1-6  are used for transmitting data
 #define CHIPS_RX_N     6 // cores 7-12 are used for receiving data
 #define DECODE_ST_SIZE 6 // this should be 6, set to 12 only for testing the SDRAM used by all 12 cores
-#define TRIALS         1 //using a buffer of 500000, trials=100, tx_reps=50 results in a run time of 8hrs 
-#define TX_REPS        10 
+#define TRIALS         2 //using a buffer of 500000, trials=100, tx_reps=50 results in a run time of 8hrs 
+#define TX_REPS        20 
 
 // Address values
 #define FINISH             (SPINN_SDRAM_BASE + 0)                // size: 12 ints ( 0..11)
@@ -70,6 +55,7 @@ volatile uint packets     = 0;
 volatile uint bit_buffer  = 0;
 volatile uint bit_mask    = 128;
 volatile uint decode_done = 0;
+volatile uint countReps   = 0;
 volatile uint codecount;
 volatile uint textcount;
 volatile uint buffer[N*2];
@@ -84,7 +70,7 @@ uint eof_sent = 0;
 uint timeout = 0;
 
 // Connection defintion for a one board SpiNN5 board
-// 1 implies at a connection is present, and a 0 means no connection
+// 1 implies that a connection is present, and a 0 means no connection
 // This definition table will be used to make sure that no data
 // is sent from those links on the border that are floating.
 // Values initialized in function border_links_setup()
@@ -98,7 +84,7 @@ uint error_pkt;
 // static (global scope): only declared within this file
 // volatile:              compiler does not cache variable
 // *const:                compiler uses this value directly as an addresses
-//                        (only done for efficienct reasons)
+//                        (only done for efficiency reasons)
 typedef struct
 { 
   volatile uint trial_num;
@@ -111,20 +97,6 @@ typedef struct
   volatile uchar enc_dec_match; // yes/no
 } info_tx_t;
 static volatile info_tx_t *const info_tx = (info_tx_t *) CHIP_INFO_TX;
-
-/*
-typedef struct
-{
-  volatile uint trial_num;
-  volatile uint stream_num;
-  volatile uint org_array_size;
-  volatile uint enc_array_size;
-  volatile uint dec_array_size;
-  volatile ushort decode_time;
-  volatile uchar enc_dec_match; // yes/no
-} info_rx_t;
-static volatile info_rx_t *const info_rx = (info_rx_t *) CHIP_INFO_RX;
-*/
 
 static volatile uint   *const finish             = (uint *) FINISH; 
 static volatile uint   *const decode_status_chip = (uint *) DECODE_STATUS_CHIP;
@@ -165,7 +137,7 @@ fault_t fault[3];
 // Spinnaker function prototypes
 void router_setup(void);
 void allocate_memory(void);
-//int mem_alloc(unsigned char *data, uint buffer_size);
+unsigned char *mem_alloc(uint buffer_size);
 void gen_random_data(void);
 void encode_decode(uint none1, uint none2);
 void store_packets(uint key, uint payload);
@@ -261,7 +233,7 @@ int c_main(void)
   spin1_callback_on(MCPL_PACKET_RECEIVED, store_packets, -1);
 
   // Timer callback which reports status to the host
-  spin1_callback_on(TIMER_TICK, report_status, 1);
+  spin1_callback_on(TIMER_TICK, report_status, 0);
 
   // Encode and decode the previously generated random data and store in SDRAM
   spin1_schedule_callback(encode_decode, 0, 0, 2);
@@ -272,9 +244,9 @@ int c_main(void)
   // Setup router links
   router_setup();
 
-#ifdef BOARDS1
-  border_links_setup();
-#endif
+ #ifdef BOARDS1
+   border_links_setup();
+ #endif
 
   // Allocate SDRAM memory for the original, encoded and decoded arrays
   allocate_memory();
@@ -381,11 +353,9 @@ void border_links_setup(void)
   c[0][1] = bin2dec("100111");
 }
 
-
 // Allocate the SDRAM memory for the transmit as well as the receive chips
 void allocate_memory(void)
 {
-  int  i;
   //int s_len;
   //char str[100];
 
@@ -406,130 +376,46 @@ void allocate_memory(void)
     /*******************************************************/
     
     // Original array
-    if (!(data_orig.buffer   = (unsigned char *)sark_xalloc (sv->sdram_heap, SDRAM_BUFFER*sizeof(char), 0, ALLOC_LOCK)))
-    {
-      io_printf(IO_BUF, "Unable to allocate memory (Orig)!\n");
-      rt_error(RTE_ABORT);
-    }      
-    //Initialize buffer
-    for(i=0; i<SDRAM_BUFFER; i++)
-      data_orig.buffer[i] = 0;
+    data_orig.buffer = mem_alloc(SDRAM_BUFFER);
 
-    // Compressed array
-    if (!(data_enc.buffer = (unsigned char *)sark_xalloc (sv->sdram_heap, SDRAM_BUFFER_X*sizeof(char), 0, ALLOC_LOCK)))
-    {
-      io_printf(IO_BUF, "Unable to allocate memory (Enc)!\n");
-      rt_error(RTE_ABORT);
-    }
-    //Initialize buffer
-    for(i=0; i<SDRAM_BUFFER_X; i++)
-      data_enc.buffer[i] = 0;
+    // // Compressed array
+    data_enc.buffer = mem_alloc(SDRAM_BUFFER_X);
 
-    // Decompressed array
-    if (!(data_dec.buffer = (unsigned char *)sark_xalloc (sv->sdram_heap, SDRAM_BUFFER*sizeof(char), 0, ALLOC_LOCK)))
-    {
-      io_printf(IO_BUF, "Unable to allocate memory (Dec)!\n");
-      rt_error(RTE_ABORT);
-    }
-    //Initialize buffer
-    for(i=0; i<SDRAM_BUFFER; i++)
-      data_dec.buffer[i] = 0;
+    // // Decompressed array
+    data_dec.buffer = mem_alloc(SDRAM_BUFFER);
   }
 
   // Allocate memory for RX chips
   if(coreID>=CHIPS_TX_N+1 && coreID<=CHIPS_TX_N+CHIPS_RX_N)
   {
-    if (!(data.buffer   = (unsigned char *)sark_xalloc (sv->sdram_heap, (SDRAM_BUFFER+SDRAM_BUFFER_X+8)*sizeof(char), 0, ALLOC_LOCK)))
-    {
-      io_printf(IO_BUF, "Unable to allocate memory (Rx)!\n");
-      rt_error(RTE_ABORT);
-    }
-    //Initialize buffer
-    for(i=0; i<SDRAM_BUFFER+SDRAM_BUFFER_X+8; i++)
-      data.buffer[i] = 0;
+    // Original array
+    data.buffer = mem_alloc(SDRAM_BUFFER+SDRAM_BUFFER_X+8);
 
     // Decompressed array
-    if (!(data_dec.buffer = (unsigned char *)sark_xalloc (sv->sdram_heap, SDRAM_BUFFER*sizeof(char), 0, ALLOC_LOCK)))
-    {
-      io_printf(IO_BUF, "Unable to allocate memory (Dec)!\n");
-      rt_error(RTE_ABORT);
-    }
-    //Initialize buffer
-    for(i=0; i<SDRAM_BUFFER; i++)
-      data_dec.buffer[i] = 0;
-  
+    data_dec.buffer = mem_alloc(SDRAM_BUFFER);
+
     data.stream_end = 1;
   }
 
 }
 
-// // Allocate the SDRAM memory for the transmit as well as the receive chips
-// void allocate_memory(void)
-// {
-//   //int s_len;
-//   //char str[100];
+// Allocate and initialise memory
+unsigned char *mem_alloc(uint buffer_size)
+{
+  unsigned char *data;
 
-//   // Transmit and receive chips memory allocation
+  if (!(data = (unsigned char *)sark_xalloc (sv->sdram_heap, buffer_size*sizeof(char), 0, ALLOC_LOCK)))
+  {
+    io_printf(IO_BUF, "Unable to allocate memory!\n");
+    rt_error(RTE_ABORT);
+  } 
 
-//   // Allocate memory for TX chips
-//   if (coreID>=1 && coreID<=CHIPS_TX_N)
-//   {
-//     finish[coreID-1] = 0;
-//     decode_status_chip[coreID-1] = 0;
-//     rx_packets_status[coreID-1] = 0;
+  //Initialize buffer
+  for(uint i=0; i<buffer_size; i++)
+    data[i] = 0;
 
-//     // Welcome message
-//     io_printf(IO_BUF, "LZSS Enc/Dec Test\n");
-
-//     /*******************************************************/
-//     /* Allocate memory                                     */
-//     /*******************************************************/
-    
-//     // Original array
-//     if (!mem_alloc(data_orig.buffer, SDRAM_BUFFER))
-//       io_printf(IO_BUF, "Unable to allocate memory (Orig)!\n");
-
-//     // Compressed array
-//     if (!mem_alloc(data_enc.buffer, SDRAM_BUFFER_X))
-//       io_printf(IO_BUF, "Unable to allocate memory (Enc)!\n");
-
-//     // Decompressed array
-//     if (!mem_alloc(data_dec.buffer, SDRAM_BUFFER))
-//       io_printf(IO_BUF, "Unable to allocate memory (Dec)!\n");
-//   }
-
-//   // Allocate memory for RX chips
-//   if(coreID>=CHIPS_TX_N+1 && coreID<=CHIPS_TX_N+CHIPS_RX_N)
-//   {
-//     if (!mem_alloc(data.buffer, SDRAM_BUFFER+SDRAM_BUFFER_X+8))
-//       io_printf(IO_BUF, "Unable to allocate memory (Rx)!\n"); 
-
-//     // Decompressed array
-//     if (!mem_alloc(data_dec.buffer, SDRAM_BUFFER))
-//       io_printf(IO_BUF, "Unable to allocate memory (Rx)!\n"); 
-
-//     data.stream_end = 1;
-//   }
-
-// }
-
-// // Allocate and initialise memory
-// int mem_alloc(unsigned char *data, uint buffer_size)
-// {
-//   uint i;
-
-//   if (!(data = (unsigned char *)sark_xalloc (sv->sdram_heap, buffer_size*sizeof(char), 0, ALLOC_LOCK)))
-//   {
-//     //io_printf(IO_BUF, "Unable to allocate memory!\n");
-//     //rt_error(RTE_ABORT);
-//     return 0; //error state
-//   }      
-//   //Initialize buffer
-//   for(i=0; i<buffer_size; i++)
-//     data[i] = 0;
-  
-//   return 1; // no error
-// }
+  return data;
+}
 
 
 // Generate the random data array for the transmit chips
@@ -572,8 +458,8 @@ void encode_decode(uint none1, uint none2)
     // Send trial no. to host
     if (chipIDx==0 && chipIDy==0 && leadAp)
     {
-      t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
-      io_printf(s, "BId:%d T: %ss. Trial: %d", boardNum, ftoa(t,1), i+1);
+      t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1e6;
+      io_printf(s, "BId:%d T: %ss. Trial: %d", boardNum, ftoa(t,0), i+1);
       send_msg(s);
     }
 
@@ -629,8 +515,8 @@ void encode_decode(uint none1, uint none2)
 
           if (chipID==0 && coreID==1)
           {
-            t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
-            io_printf(s, "BId:%d T: %ss. Transmitting packets (rep %d) ...", boardNum, ftoa(t,1), j+1);
+            t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1e6;
+            io_printf(s, "BId:%d T: %ss. Transmitting packets (rep %d) ...", boardNum, ftoa(t,0), j+1);
             send_msg(s);
           }
           
@@ -642,8 +528,8 @@ void encode_decode(uint none1, uint none2)
           io_printf(IO_BUF, "Waiting for dec\n");
           if (chipID==0 && coreID==1)
           {
-            t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
-            io_printf(s, "BId:%d T: %ss. Waiting for decode to finish", boardNum, ftoa(t,1));
+            t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1e6;
+            io_printf(s, "BId:%d T: %ss. Waiting for decode to finish", boardNum, ftoa(t,0));
             send_msg(s);
           }
 
@@ -652,18 +538,38 @@ void encode_decode(uint none1, uint none2)
           io_printf(IO_BUF, "Dec done Rx\n");
           if (chipID==0 && coreID==1)
           {
-            t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
-            io_printf(s, "BId:%d T: %ss. Decode done received", boardNum, ftoa(t,1));
+            countReps++;
+
+            t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1e6;
+            io_printf(s, "BId:%d T: %ss. Decode done received", boardNum, ftoa(t,0));
             send_msg(s);
+
+            if (countReps==TRIALS*TX_REPS)
+            {
+              io_printf(s, "BId:%d T: %ss. End of testing!", boardNum, ftoa(t,0));
+              send_msg(s);
+            }
           }
 
           decode_done = 0;
-        } 
-
+        }
       } //endif
 #endif
 
     }
+  }
+
+  // It's now safe to exit cores 1-6 since they're only involved in the TX phase
+  if (coreID>=1 && coreID<=6)
+    spin1_exit(0);
+
+  // safely exit unused RX cores on the edges of the Spin5 board
+  if (coreID>=7 && coreID<=12)
+  {  
+    //io_printf(IO_BUF, "c:%d, x:%d, y:%d coreID:%d\n", c[chipIDx][chipIDy], chipIDx, chipIDy, coreID);
+    //io_printf(IO_BUF, "c:%d\n", ~c[chipIDx][chipIDy]>>(coreID-7) );
+    if ( ~(c[chipIDx][chipIDy]>>(coreID-7)) & 1)
+      spin1_exit(0);
   }
 }
 
@@ -892,6 +798,8 @@ void tx_packets(int trialNum)
 // Count the packets received
 void store_packets(uint key, uint payload)
 {
+  char s[50];
+
   if (payload==0xffffffff && !data.stream_end)
   {  
     error_pkt = 0;
@@ -911,7 +819,7 @@ void store_packets(uint key, uint payload)
   if (packets==SDRAM_BUFFER+SDRAM_BUFFER_X+8)
   {
     error_pkt = 1;
-    spin1_schedule_callback(report_buffer_error, 0, 0, 2);
+//    spin1_schedule_callback(report_buffer_error, 0, 0, 2);
   }
 
 }
@@ -939,6 +847,7 @@ int count_chars(char *str)
   return i-1;
 }
 
+// Initialise SDP
 void sdp_init(void)
 {
   my_msg.tag       = 1;             // IPTag 1
@@ -977,7 +886,7 @@ void decode_rx_packets(uint none1, uint none2)
       rx_packets_status[coreID-7] = 2;
 
       io_printf(IO_BUF, "ERROR! Rx!=Exp pkt!\n");
-      io_printf(s, "BId:%d ERROR! Trial: %d Rx packets (%d) != Expected packets (%d)!", boardNum, trial_num, packets-8, data.orig_size+data.enc_size);
+      io_printf(s, "ChipID: %d,%d,%2d ERROR! Trial: %d Rx packets (%d) != Expected packets (%d)!", chipBoardIDx, chipBoardIDy, coreID, trial_num+1, packets-8, data.orig_size+data.enc_size);
       send_msg(s);
 
       // Decoding done
@@ -1005,6 +914,11 @@ void decode_rx_packets(uint none1, uint none2)
     trial_num++;
     packets = 0;
     data.stream_end = 1;
+
+    // Safely exit decoding cores
+    countReps++;
+    if (countReps==TRIALS*TX_REPS)
+      spin1_exit(0);
   }
 }
 
@@ -1014,12 +928,12 @@ void report_status(uint ticks, uint null)
   char s[100];
   static int tmp = -1;
 
-  if (chipID==0 && coreID==13 && (ticks % (XCHIPS_BOARD * YCHIPS_BOARD))==chipBoardNum )
+  if (chipID==0 && coreID==1 && (ticks % (XCHIPS_BOARD * YCHIPS_BOARD))==chipBoardNum )
   {
     if (tmp!=info_tx->progress[0])
     {
       t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1e6;
-      io_printf(s, "BId:%d T: %ss. Trial: %d Progress: %d%%", boardNum, ftoa(t,1), info_tx->trial_num, info_tx->progress[0]);
+      io_printf(s, "BId:%d T: %ss. Trial: %d Progress: %d%%", boardNum, ftoa(t,0), info_tx->trial_num, info_tx->progress[0]);
       send_msg(s);
 
       tmp = info_tx->progress[0];
@@ -1037,39 +951,6 @@ void report_status(uint ticks, uint null)
       send_msg(s);
     }
   }
-
-/*
-  static int done = 0;
-
-  uint finish_tmp=0;
-
-  decode_status_chip[coreID-1] = decode_status;
-
-  // send results to host
-  // only the lead application core does this
-  // Spread out the reporting to avoid SDP packet drop
-  if (coreID==13 && !done && (ticks % (XCHIPS * YCHIPS)) == chipNum)
-  {
-    for(i=0; i<DECODE_ST_SIZE; i++)
-      finish_tmp+=decode_status_chip[i];
-
-    if (finish_tmp==DECODE_ST_SIZE)
-    {
-      strcpy(s, "Status: ");
-      for(i=0; i<DECODE_ST_SIZE; i++)
-      {
-        strcat(s, itoa(decode_status_chip[i]));
-        // Don't put a space at the end of the string
-        if (i<DECODE_ST_SIZE-1)
-          strcat(s, " ");
-      }
-      // Send SDP message
-      send_msg(s);
-    }
-
-    done = 1;
-  }
-*/
 
 }
 
@@ -1156,7 +1037,7 @@ void encode(void)
         progress = (int)((textcount*100)/data_orig.size);
         if (progress%10==0 && progress!=progress_tmp)
         {  
-          t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
+          t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1e6;
           
           io_printf(IO_BUF, "%d%% T:%ss\n", progress, ftoa(t,1));
           info_tx->progress[coreID-1] = progress;
@@ -1170,7 +1051,7 @@ void encode(void)
   flush_bit_buffer();
   data.stream_end = 1;
 
-  t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
+  t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1e6;
   io_printf(IO_BUF, "Orig:%d Enc:%d(%d%%)\n", textcount, codecount, (codecount*100)/textcount);
   io_printf(IO_BUF, "T:%ss\n", ftoa(t,1));
 }
@@ -1253,7 +1134,7 @@ void decode(void)
 {
   int i, j, k, r, c;
 
-  t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1000000;
+  t = (float)spin1_get_simulation_time()*TIMER_TICK_PERIOD/1e6;
   io_printf(IO_BUF, "T:%ss\n", ftoa(t,1));
 
   textcount=0;
@@ -1402,6 +1283,7 @@ int frac(float num, uint precision)
   return (int)((num-(int)num)*m);
 }
 
+// Function that converts an integer to a string.
 char *itoa(uint n)
 {
     char s[32];
@@ -1422,18 +1304,22 @@ char *itoa(uint n)
     return rv;
 }
 
+// Function that converts a float to a string to the required 'precision'.
 char *ftoa(float num, int precision)
 {
   static char s[20];
 
   strcpy(s, itoa((int)num));
-  strcat(s, ".");
-  strcat(s, itoa(frac(num, precision)));
+  if (precision>0)
+  {
+    strcat(s, ".");
+    strcat(s, itoa(frac(num, precision)));
+  }
 
   return s;
 }
 
-
+// Function that reports the total simulation time.
 void app_done(void)
 {
   // report simulation time
@@ -1441,17 +1327,19 @@ void app_done(void)
     io_printf(IO_BUF, "Sim lasted %d ticks.\n\n", spin1_get_simulation_time());
 }
 
-
+// Function that reports the chip address relative to the bottom.
 uint spin1_get_chip_board_id(void)
 {
   return (uint)sv->board_addr;
 }
 
+// Function that reports the address of the nearest ethernet chip
 uint spin1_get_eth_board_id(void)
 {
   return (uint)sv->eth_addr;
 }
 
+// Function that reports the IP address of the current board.
 uchar *spin1_get_ipaddr(void)
 {
   return sv->ip_addr;
@@ -1467,18 +1355,20 @@ void ijtag_init(void)
    sc[SC_MISC_CTRL] |= JTAG_INT;
 }
 
+// Function that reports useful information about the current system setup.
 void report_system_setup(void)
 {
   char s[100];
 
   if (chipIDx==0 && chipIDy==0 && leadAp)
   {
-    io_printf(s, "BId:%d System setup - Boards:%d, XChips:%d, YChips:%d, Trials:%d, Reps:%d, Bytes:%d",
-                                 boardNum, BOARDSTOT, XCHIPS, YCHIPS, TRIALS, TX_REPS, SDRAM_BUFFER);
+    io_printf(s, "BId:%d System setup - XChips:%d, YChips:%d, Trials:%d, Reps:%d, Bytes:%d",
+                                 boardNum, XCHIPS, YCHIPS, TRIALS, TX_REPS, SDRAM_BUFFER);
     send_msg(s);
   }
 }
 
+// Function used to configure various settings for injecting faults into the system.
 void fault_test_init(void)
 {
   // Fault 1
@@ -1532,6 +1422,7 @@ void fault_test_init(void)
   fault[2].drop_ack      = -1; // drop ack
 }
 
+// Function that converts a binary value into decimal
 uint bin2dec(const char* bin)
 {
   uint power=1, dec=0;

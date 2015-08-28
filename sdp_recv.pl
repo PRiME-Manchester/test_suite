@@ -54,9 +54,12 @@ sub main
     $SIG{'INT'} = sub {close(MYFILE)};
 
     $i = 1;
-    while (1)
+    
+    my $rc;
+    my $finish=0;
+    do
     {
-    	my $rc = $spin->recv_sdp (timeout => $timeout, debug => 4);
+        $rc = $spin->recv_sdp (timeout => $timeout, debug => 4);
 
         if ($rc) {
             #Replace any %% with %. Seems like not all % were %%
@@ -67,7 +70,12 @@ sub main
             printf $i.' '.$rc;
             $i++;
         }
-    }
+
+        if (defined $rc && $rc =~ /End of testing/)
+        {
+            $finish = 1;
+        }
+    } while (!$finish);
 
     close(MYFILE);
 }
