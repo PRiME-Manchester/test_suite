@@ -34,35 +34,35 @@ my $core17 = 0;
 
 for (my $x = 0; $x < 8; $x++)
 {
-    for (my $y = 0; $y < 8; $y++)
-    {
-	my $map = $spin4_map->[$y]->[$x];
-	next unless $map;
+  for (my $y = 0; $y < 8; $y++)
+  {
+		my $map = $spin4_map->[$y]->[$x];
+		next unless $map;
 
-	for (my $c = 0; $c < 18; $c++)
-	{
+		for (my $c = 0; $c < 18; $c++)
+		{
 	    eval
 	    {
-		my $e = $spin->ver (addr => [$x, $y, $c]);
+				my $e = $spin->ver (addr => [$x, $y, $c]);
 	    };
 	    
 	    $cores++ unless $@;
 
 	    if ($@)
 	    {
-		if ($c == 17 && $@ =~ /RC_CPU/)
-		{
-		    print "# ($x, $y) - 17 core\n";
-		    $core17++;
-		}
-		else
-		{
-		    print "($x, $y, $c) $@";
-		    next;
-		}
+				if ($c == 17 && $@ =~ /RC_CPU/)
+				{
+			    print "# ($x, $y) - 17 core\n";
+			    $core17++;
+				}
+				else
+				{
+			    print "($x, $y, $c) $@";
+			    next;
+				}
 	    }
-	}
-    }
+		}
+  }
 }
 
 $spin->close ();

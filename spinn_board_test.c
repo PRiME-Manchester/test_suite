@@ -18,29 +18,40 @@
 #define mod(x,m) ((x%(m) + m)%(m))
 
 #define NO_DEBUG   // rename to DEBUG to enable more verbose debugging on iobuf
-#define NO_FAULT_TESTING // rename to FAULT_TESTING when injecting faults in the Spinn Links
-#define BOARDS1    // currently only used border_links_setup()
+#define FAULT_TESTING // rename to FAULT_TESTING when injecting faults in the Spinn Links
+
+#define SPIN5
 #define BOARD_STEP_IP 16
 #define TX_PACKETS // rename to disable transmission of packets between chips
 
 #define TIMER_TICK_PERIOD  10000 // microseconds
-#define SDRAM_BUFFER       10000
+#define SDRAM_BUFFER       50000
 #define SDRAM_BUFFER_X     (SDRAM_BUFFER*1.2)
 #define LZSS_EOF           -1
-#define DELAY              2 //us delay 
+#define DELAY              3 //us delay 
 //#define NODELAY // this variable removes any delays, takes precedence over DELAY
 
-// default values for 1 board
-#define XCHIPS_BOARD 8
-#define YCHIPS_BOARD 8
+// default values for 1 Spin5 board
+#ifdef SPIN3
+  #define XCHIPS_BOARD 2
+  #define YCHIPS_BOARD 2
 
-#define XCHIPS 8
-#define YCHIPS 8
+  #define XCHIPS 2
+  #define YCHIPS 2
+#endif
+
+#ifdef SPIN5
+  #define XCHIPS_BOARD 8
+  #define YCHIPS_BOARD 8
+
+  #define XCHIPS 8
+  #define YCHIPS 8
+#endif
 
 #define CHIPS_TX_N     6 // cores 1-6  are used for transmitting data
 #define CHIPS_RX_N     6 // cores 7-12 are used for receiving data
 #define DECODE_ST_SIZE 6 // this should be 6, set to 12 only for testing the SDRAM used by all 12 cores
-#define TRIALS         2 //using a buffer of 500000, trials=100, tx_reps=50 results in a run time of 8hrs 
+#define TRIALS         1 //using a buffer of 500000, trials=100, tx_reps=50 results in a run time of 8hrs 
 #define TX_REPS        20 
 
 // Address values
@@ -49,7 +60,6 @@
 #define RX_PACKETS_STATUS  (SPINN_SDRAM_BASE + 18*sizeof(uint))  // size: 6 ints  (18..23)
 #define CHIP_INFO_TX       (SPINN_SDRAM_BASE + 24*sizeof(uint))  // size: 19*6=114 bytes (24..137)
 #define CHIP_INFO_RX       (SPINN_SDRAM_BASE + 138*sizeof(uint)) // size: 19*6=114 bytes (138..137
-
 
 volatile uint packets     = 0;
 volatile uint bit_buffer  = 0;
@@ -244,9 +254,7 @@ int c_main(void)
   // Setup router links
   router_setup();
 
- #ifdef BOARDS1
-   border_links_setup();
- #endif
+  border_links_setup();
 
   // Allocate SDRAM memory for the original, encoded and decoded arrays
   allocate_memory();
@@ -326,31 +334,40 @@ void router_setup(void)
 // SpiNN5 single board border links
 void border_links_setup(void)
 {
-  for(uint i=0; i<8; i++)
-    for(uint j=0; j<8; j++)
-      c[i][j] = 63;
+#ifdef SPIN3
+    c[0][0] = bin2dec("000111");
+    c[0][1] = bin2dec("110001");
+    c[1][0] = bin2dec("001110");
+    c[1][1] = bin2dec("111000");
+#endif
 
-  c[0][0] = bin2dec("000111");
-  c[1][0] = bin2dec("001111");
-  c[2][0] = bin2dec("001111");
-  c[3][0] = bin2dec("001111");
-  c[4][0] = bin2dec("001110");
-  c[5][1] = bin2dec("011110");
-  c[6][2] = bin2dec("011110");
-  c[7][3] = bin2dec("011100");
-  c[7][4] = bin2dec("111100");
-  c[7][5] = bin2dec("111100");
-  c[7][6] = bin2dec("111100");
-  c[7][7] = bin2dec("111000");
-  c[6][7] = bin2dec("111001");
-  c[5][7] = bin2dec("111001");
-  c[4][7] = bin2dec("110001");
-  c[3][6] = bin2dec("110011");
-  c[2][5] = bin2dec("110011");
-  c[1][4] = bin2dec("110011");
-  c[0][3] = bin2dec("100011");
-  c[0][2] = bin2dec("100111");
-  c[0][1] = bin2dec("100111");
+#ifdef SPIN5
+    for(uint i=0; i<8; i++)
+      for(uint j=0; j<8; j++)
+        c[i][j] = 63;
+
+    c[0][0] = bin2dec("000111");
+    c[1][0] = bin2dec("001111");
+    c[2][0] = bin2dec("001111");
+    c[3][0] = bin2dec("001111");
+    c[4][0] = bin2dec("001110");
+    c[5][1] = bin2dec("011110");
+    c[6][2] = bin2dec("011110");
+    c[7][3] = bin2dec("011100");
+    c[7][4] = bin2dec("111100");
+    c[7][5] = bin2dec("111100");
+    c[7][6] = bin2dec("111100");
+    c[7][7] = bin2dec("111000");
+    c[6][7] = bin2dec("111001");
+    c[5][7] = bin2dec("111001");
+    c[4][7] = bin2dec("110001");
+    c[3][6] = bin2dec("110011");
+    c[2][5] = bin2dec("110011");
+    c[1][4] = bin2dec("110011");
+    c[0][3] = bin2dec("100011");
+    c[0][2] = bin2dec("100111");
+    c[0][1] = bin2dec("100111");
+#endif
 }
 
 // Allocate the SDRAM memory for the transmit as well as the receive chips
@@ -449,6 +466,10 @@ void encode_decode(uint none1, uint none2)
   //int err=0;
   char s[200];
 
+  // // This delay has been inserted so that ./sdp_recv.pl displays the first line of io_printf
+  // // when run from test_1board_single.sh
+  // spin1_delay_us(1000000);
+
   for(i=0; i<TRIALS; i++)
   {
     // Debugging boardNum
@@ -536,6 +557,14 @@ void encode_decode(uint none1, uint none2)
           // Wait for decode_done signal
           while(!decode_done);
           io_printf(IO_BUF, "Dec done Rx\n");
+          
+          // // Testing
+          // if (chipBoardIDx==2 && chipBoardIDy==3)
+          // {
+          //   io_printf(s, "Dec Done ChipID:%d,%d,%d", chipBoardIDx, chipBoardIDy, coreID);
+          //   send_msg(s);
+          // }
+
           if (chipID==0 && coreID==1)
           {
             countReps++;
@@ -580,7 +609,8 @@ void encode_decode(uint none1, uint none2)
 void tx_packets(int trialNum)
 {
   int i, num, shift;
-
+  char s[100];
+  
 #ifdef FAULT_TESTING
     int j;
     uchar drop_pkt, mod_pkt;
@@ -599,6 +629,9 @@ void tx_packets(int trialNum)
 
     if(mod_pkt)
     {
+      io_printf(s, "Here!! ChipID:%d,%d,%d", chipBoardIDx, chipBoardIDy, chipID);
+      send_msg(s);
+
       io_printf(IO_BUF, "Orig. size modified!\n");
       shift = 0;
       for (i=0; i<4; i++)
@@ -792,13 +825,14 @@ void tx_packets(int trialNum)
 
   // eof_sent is used in the ack received timeout
   eof_sent = 1;
+  timeout = 0;
 
 }
 
 // Count the packets received
 void store_packets(uint key, uint payload)
 {
-  char s[50];
+//  char s[50];
 
   if (payload==0xffffffff && !data.stream_end)
   {  
@@ -886,7 +920,7 @@ void decode_rx_packets(uint none1, uint none2)
       rx_packets_status[coreID-7] = 2;
 
       io_printf(IO_BUF, "ERROR! Rx!=Exp pkt!\n");
-      io_printf(s, "ChipID: %d,%d,%2d ERROR! Trial: %d Rx packets (%d) != Expected packets (%d)!", chipBoardIDx, chipBoardIDy, coreID, trial_num+1, packets-8, data.orig_size+data.enc_size);
+      io_printf(s, "ERROR! ChipID: %d,%d,%d. Trial: %d Rx packets (%d) != Expected packets (%d)!", chipBoardIDx, chipBoardIDy, coreID, trial_num+1, packets-8, data.orig_size+data.enc_size);
       send_msg(s);
 
       // Decoding done
@@ -943,11 +977,11 @@ void report_status(uint ticks, uint null)
   if (coreID>=1 && coreID<=6 && eof_sent)
   {
     timeout++;
-    if (timeout==1000) // if TIMER_TICK_PERIOD=10ms, this translates to a timeout of 10s 
+    if (timeout==3000) // if TIMER_TICK_PERIOD=10ms, this translates to a timeout of 20s 
     {
       timeout = 0;
       eof_sent = 0;
-      io_printf(s, "BId:%d Acknowledge timeout!", boardNum);
+      io_printf(s, "ERROR! ChipID: %d,%d,%d. Acknowledge timeout!", chipBoardIDx, chipBoardIDy, coreID);
       send_msg(s);
     }
   }
@@ -1232,7 +1266,7 @@ void check_data(int trial_num)
     io_printf(IO_BUF, "ERROR! Orig&Dec DO NOT match!!!\n");
 
     // Send SDP message
-    io_printf(s, "BId:%d ERROR! Original and Decoded Outputs do not match!!! Trial: %d, Errors:%d", boardNum, trial_num, err);
+    io_printf(s, "ERROR! ChipID %d,%d,%d. Original and Decoded Outputs do not match!!! Trial: %d, Errors:%d", chipBoardIDx, chipBoardIDy, coreID, trial_num, err);
     send_msg(s);
 
     decode_status_chip[coreID-1] = 2;
@@ -1375,8 +1409,8 @@ void fault_test_init(void)
   fault[0].chipIDx        = 0;
   fault[0].chipIDy        = 0;
   fault[0].coreID         = 6;
-  fault[0].trialNum       = 2;
-  fault[0].repNum         = -1;
+  fault[0].trialNum       = 0;
+  fault[0].repNum         = 2;
   fault[0].orig_size      = 25;
   fault[0].enc_size       = 68;
   fault[0].drop_eof       = 1;
@@ -1393,11 +1427,12 @@ void fault_test_init(void)
   fault[1].chipIDx       = 1;
   fault[1].chipIDy       = 1;
   fault[1].coreID        = 7;
-  fault[1].trialNum      = 2;
-  fault[1].repNum        = 5;
+  fault[1].trialNum      = 0;
+  fault[1].repNum        = 0;
   fault[1].orig_size     = 0;
   fault[1].enc_size      = 0;
   fault[1].drop_eof      = 0;
+
   fault[1].orig_drop_pkt = 6;  // packet no. to drop (orig. stream)
   fault[1].orig_mod_pkt  = 12; // packet no. to modify
   fault[1].orig_mod_val  = 1;  // packet modify value
@@ -1406,13 +1441,14 @@ void fault_test_init(void)
   fault[1].enc_mod_val   = 1;  // packet modify value
   fault[1].drop_ack      = -1; // drop ack
 
-  // Fault 3
+  // // Fault 3
   fault[2].chipIDx       = -1;
   fault[2].chipIDy       = -1;
   fault[2].coreID        = -1;
   fault[2].trialNum      = -1;
   fault[2].repNum        = -1;
   fault[2].repNum        = -1;
+
   fault[2].orig_drop_pkt = 6;  // packet no. to drop (orig. stream)
   fault[2].orig_mod_pkt  = 12; // packet no. to modify
   fault[2].orig_mod_val  = 1;  // packet modify value

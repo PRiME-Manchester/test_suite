@@ -34,41 +34,41 @@ print "------  --    ---   ---   ---   ---   ---   ---\n";
 
 for (my $x = 0; $x < 8; $x++)
 {
-    for (my $y = 0; $y < 8; $y++)
-    {
-	my $map = $spin4_map->[$y]->[$x];
-	next unless $map;
+  for (my $y = 0; $y < 8; $y++)
+  {
+		my $map = $spin4_map->[$y]->[$x];
+		next unless $map;
 
-	my ($text, $lu);
+		my ($text, $lu);
 
-	for (my $link = 0; $link < 6; $link++)
-	{
+		for (my $link = 0; $link < 6; $link++)
+		{
 	    my $d;
 
 	    eval
 	    {
-		$lu = $sv->read_var ("sv.link_up", addr => [$x, $y]);
+				$lu = $sv->read_var ("sv.link_up", addr => [$x, $y]);
 
-		$d = $spin->link_read ($link, 0xf5007f00, 4,
-				     addr => [$x, $y],
-				     unpack => "V");
+				$d = $spin->link_read ($link, 0xf5007f00, 4,
+						     addr => [$x, $y],
+						     unpack => "V");
 	    };
 	    
 	    if ($@)
 	    {
-		push @errors, "($x, $y) $@\n";
-		$text .= "   ###";
-#		last;
+				push @errors, "($x, $y) $@\n";
+				$text .= "   ###";
+		#		last;
 	    }
 	    else
 	    {
-		my $t = sprintf "%d,%d", ($d->[0] >> 8) & 255, $d->[0] & 255;
-		$text .= sprintf " %5s", $t;
+				my $t = sprintf "%d,%d", ($d->[0] >> 8) & 255, $d->[0] & 255;
+				$text .= sprintf " %5s", $t;
 	    }
-	}
+		}
 
-	printf "%2d %2d   %02x %s\n", $x, $y, $lu, $text;
-    }
+		printf "%2d %2d   %02x %s\n", $x, $y, $lu, $text;
+  }
 }
 
 print @errors;
