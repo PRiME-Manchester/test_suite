@@ -30,7 +30,7 @@ function valid_ip()
         stat=$?
     fi
 
-		BMP_IP="${ip[0]}.${ip[1]}.${ip[2]}.$((ip[3]-1))"
+	BMP_IP="${ip[0]}.${ip[1]}.${ip[2]}.$((ip[3]-1))"
 
     return $stat
 }
